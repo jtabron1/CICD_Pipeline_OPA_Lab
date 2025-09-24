@@ -553,7 +553,7 @@ jobs:
           name: Validate Sample Resource
           command: |
             # Create a sample S3 bucket configuration (compliant)
-            cat > compliant-s3.json << 'JSON'
+            cat > compliant-s3.json \<< 'JSON'
             {
               "resource_type": "aws_s3_bucket",
               "server_side_encryption_configuration": {
@@ -577,7 +577,7 @@ jobs:
             fi
             
             # Create a non-compliant S3 bucket configuration
-            cat > non-compliant-s3.json << 'JSON'
+            cat > non-compliant-s3.json \<< 'JSON'
             {
               "resource_type": "aws_s3_bucket",
               "acl": "public-read"
@@ -728,7 +728,7 @@ jobs:
             echo "Validating Terraform resources against policies..."
             
             # Create JSON representation of our violating S3 bucket
-            cat > terraform-resources.json << 'JSON'
+            cat > terraform-resources.json \<< 'JSON'
             [
               {
                 "resource_type": "aws_s3_bucket",
@@ -804,7 +804,7 @@ jobs:
             cd terraform/
             
             # Create compliant version
-            cat > main-compliant.tf << 'TERRAFORM'
+            cat > main-compliant.tf \<< 'TERRAFORM'
             provider "aws" {
               region = var.aws_region
             }
@@ -1144,7 +1144,7 @@ jobs:
             echo "🔍 Testing policy enforcement with compliant resources..."
             
             # Test compliant S3 bucket
-            cat > compliant-test.json << 'JSON'
+            cat > compliant-test.json \<< 'JSON'
             {
               "resource_type": "aws_s3_bucket",
               "bucket": "test-bucket",
@@ -1198,7 +1198,7 @@ jobs:
             cd terraform/
             
             # Create compliant configuration
-            cat > main.tf << 'TERRAFORM'
+            cat > main.tf \<< 'TERRAFORM'
             provider "aws" {
               region = var.aws_region
             }
