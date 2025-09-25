@@ -152,10 +152,20 @@ git push -u origin main
 ### 2.2 Connect Your Repository
 
 1. In CircleCI dashboard, click "Projects"
-2. Find `circleci-aws-opa-lab` in the list
-3. Click "Set Up Project"
-4. Choose "Fastest" setup option
-5. CircleCI will create a basic `.circleci/config.yml` file
+2. Click on "Create Project" in the top right of the window
+3. Choose "Build, test, and deploy your software application"
+4. Name the project "circleci-aws-opa-lab"
+5. Click "setup a pipeline"
+6. It's ok to go with the default pipeline name "build-and-test"
+7. Click "Next: choose a repo"
+8. Find `circleci-aws-opa-lab` in the list
+9. Click "Next: set up your config"
+10. Click "Prepare config file" 
+11. CircleCI will create a basic `.circleci/config.yml` file
+12. Click "Next: set up your triggers"
+13. "All pushes" is fine
+14. Click "Next: review and finish setup"
+15. Click "Commit config and run"
 
 ### 2.3 Create CircleCI Configuration
 
