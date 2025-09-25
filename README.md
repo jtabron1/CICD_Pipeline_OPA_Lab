@@ -133,7 +133,7 @@ git add .
 git commit -m "Initial commit: Lab setup"
 
 # Connect to GitHub (replace YOUR_USERNAME with your actual GitHub username)
-git remote add origin https://github.com/YOUR_USERNAME/circleci-aws-opa-lab.git
+git remote add origin git@github.com:YOUR_USERNAME/circleci-aws-opa-lab.git
 git branch -M main
 git push -u origin main
 ```
