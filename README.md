@@ -56,6 +56,7 @@ touch README.md .gitignore
 ```
 
 If you haven't already, I'd recommend setting up SSH first (recommended so you’re not prompted to authenticate with every push):
+**Very Important**:  If you are prompted to create a passphrase, you need to store it somewhere like a password manager.  **You will need it again!  Even if you store it in your apple keychain**
 
 ```bash
 # Generate an SSH key (press Enter through prompts unless you want a custom path)
