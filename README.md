@@ -346,10 +346,6 @@ EOF
 
 # IMPORTANT: Edit the file to replace placeholders with your actual values
 
-#this nano command below is the next command you enter after the step above is complete
-
-nano aws-configs/circleci-trust-policy.json
-(Note: If you don't like using nano in the terminal to edit files then you can navigate to the actual file in finder and edit the file with your text editor)
 
 # Replace ALL instances of:
 # YOUR_AWS_ACCOUNT_ID with your 12-digit AWS account ID
@@ -436,8 +432,6 @@ workflows:
       - test-aws-connection
 EOF
 
-# IMPORTANT: Edit the file to replace YOUR_AWS_ACCOUNT_ID
-nano .circleci/config.yml
 # Replace YOUR_AWS_ACCOUNT_ID with your actual 12-digit AWS account ID
 ```
 
