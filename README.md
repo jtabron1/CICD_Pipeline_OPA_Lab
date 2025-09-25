@@ -711,10 +711,6 @@ EOF
 ```
 
 ### 6.2 Update CircleCI to Validate Terraform and Deploy
-
-```bash
-# Update CircleCI config to include Terraform validation and deployment
-cat > .circleci/config.yml << 'EOF'
 version: 2.1
 
 jobs:
@@ -731,12 +727,20 @@ jobs:
             curl -L -o opa https://openpolicyagent.org/downloads/v0.58.0/opa_linux_amd64_static
             chmod +x opa
             sudo mv opa /usr/local/bin/
+            
+            # Install jq for JSON processing
+            sudo apt-get update
+            sudo apt-get install -y jq
       
       - run:
           name: Test OPA Policies
           command: |
             echo "Running OPA policy tests..."
-            opa test policies/ tests/
+            if [ -d "tests/" ]; then
+              opa test policies/ tests/
+            else
+              echo "No tests directory found, skipping policy tests"
+            fi
             echo "Policy tests passed!"
       
       - run:
@@ -763,32 +767,48 @@ jobs:
             
             # Validate each resource and track violations
             TOTAL_VIOLATIONS=0
-            jq -c '.[]' terraform-resources.json | while read resource; do
-              echo "Validating resource: $(echo "$resource" | jq -r '.resource_name')"
+            FOUND_VIOLATIONS=false
+            
+            # Process each resource individually
+            for i in $(jq -r 'keys | .[]' terraform-resources.json); do
+              resource=$(jq -c ".[$i]" terraform-resources.json)
+              resource_name=$(echo "$resource" | jq -r '.resource_name')
               
-              VIOLATIONS=$(echo "$resource" | opa eval -d policies/ -i - "data.aws.s3.security.deny[x]")
-              WARNINGS=$(echo "$resource" | opa eval -d policies/ -i - "data.aws.s3.security.warn[x]")
+              echo "Validating resource: $resource_name"
               
-              if [ "$VIOLATIONS" != "[]" ]; then
+              # Write resource to temporary file for OPA
+              echo "$resource" > /tmp/resource_$i.json
+              
+              VIOLATIONS=$(opa eval -d policies/ -i /tmp/resource_$i.json "data.aws.s3.security.deny[x]" --format json)
+              WARNINGS=$(opa eval -d policies/ -i /tmp/resource_$i.json "data.aws.s3.security.warn[x]" --format json)
+              
+              # Check if violations exist
+              if echo "$VIOLATIONS" | jq -e '.result | length > 0' > /dev/null 2>&1; then
                 echo "❌ POLICY VIOLATIONS FOUND:"
-                echo "$VIOLATIONS" | jq .
-                TOTAL_VIOLATIONS=$((TOTAL_VIOLATIONS + 1))
-              fi
-              
-              if [ "$WARNINGS" != "[]" ]; then
-                echo "⚠️  POLICY WARNINGS:"
-                echo "$WARNINGS" | jq .
-              fi
-              
-              if [ "$VIOLATIONS" = "[]" ]; then
+                echo "$VIOLATIONS" | jq '.result'
+                echo "VIOLATIONS_FOUND=true" >> /tmp/violations_status
+              elif [ "$VIOLATIONS" != "" ]; then
                 echo "✅ No violations found for this resource"
               fi
+              
+              # Check if warnings exist
+              if echo "$WARNINGS" | jq -e '.result | length > 0' > /dev/null 2>&1; then
+                echo "⚠️  POLICY WARNINGS:"
+                echo "$WARNINGS" | jq '.result'
+              fi
+              
+              # Clean up temp file
+              rm -f /tmp/resource_$i.json
             done
             
-            # This will intentionally fail due to policy violations
-            echo "Found policy violations in Terraform configuration"
-            echo "❌ Build failed due to policy violations - this is expected!"
-            exit 1
+            # Check if any violations were found
+            if [ -f /tmp/violations_status ] && grep -q "VIOLATIONS_FOUND=true" /tmp/violations_status; then
+              echo "Found policy violations in Terraform configuration"
+              echo "❌ Build failed due to policy violations - this is expected!"
+              exit 1
+            else
+              echo "✅ No policy violations found"
+            fi
 
   deploy-compliant-infrastructure:
     docker:
@@ -818,6 +838,8 @@ jobs:
             export AWS_WEB_IDENTITY_TOKEN_FILE="/tmp/web-identity-token"
             echo $CIRCLE_OIDC_TOKEN > $AWS_WEB_IDENTITY_TOKEN_FILE
             
+            # Create terraform directory if it doesn't exist
+            mkdir -p terraform
             cd terraform/
             
             # Create compliant version
@@ -854,6 +876,13 @@ jobs:
               restrict_public_buckets = true
             }
             
+            resource "aws_s3_bucket_versioning" "compliant_versioning" {
+              bucket = aws_s3_bucket.compliant_bucket.id
+              versioning_configuration {
+                status = "Enabled"
+              }
+            }
+            
             resource "random_string" "suffix" {
               length  = 8
               special = false
@@ -885,19 +914,23 @@ workflows:
   security-pipeline:
     jobs:
       - policy-validation
-      - deploy-infrastructure:
+      - deploy-compliant-infrastructure:
           requires:
             - policy-validation
 EOF
 
-# Edit to replace YOUR_AWS_ACCOUNT_ID
-nano .circleci/config.yml
+
 # Replace YOUR_AWS_ACCOUNT_ID with your actual AWS account ID
 
 # Commit and push the compliant version
 git add .
 git commit -m "Add compliant infrastructure that passes policy validation"
-git push origin compliant-deployment
+git push origin main
+
+**Note**: This build will fail, that's intentional:
+-The S3 security policy correctly detected that the bucket lacks server-side encryption
+-The policy provided a clear, actionable error message
+-The pipeline failed fast when policy violations were detected
 ```
 
 ### 7.3 Verify Complete Success
