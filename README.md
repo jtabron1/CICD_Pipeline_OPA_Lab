@@ -139,12 +139,6 @@ git branch -M main
 git push -u origin main
 ```
 
-**Troubleshooting Authentication**:
-- If prompted for credentials, then you need to setup SSH.  The directions for this are at the beginning of the lab
-- If you don't want to use SSH then you need a Personal Access Token (not your password)
-- Go to GitHub → Settings → Developer settings → Personal access tokens → Generate new token
-- Use the token as your password when Git prompts you
-
 ---
 
 ## Step 2: Set Up CircleCI Account and Connect Repository
