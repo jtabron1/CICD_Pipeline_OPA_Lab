@@ -212,8 +212,9 @@ git push origin main
 ### 2.4 Verify CircleCI is Working
 
 1. Go to CircleCI dashboard
-2. You should see your pipeline running
-3. Click on the build to see "Hello from CircleCI!" in the logs
+2. Click on "Pipelines"
+3. You should see your pipeline running with a green "Success"
+4. Click on "test", then "Hello World" to see "Hello from CircleCI!" in the logs
 
 ---
 
