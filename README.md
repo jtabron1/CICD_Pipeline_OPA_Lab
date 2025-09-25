@@ -710,7 +710,7 @@ output "bucket_name" {
 EOF
 ```
 
-### 6.2 Update CircleCI to Validate Terraform and Deploy
+### 6.2 Update CircleCI to Validate Terraform and Deploy (Job will fail in CircleCI)
 ```bash
 # Update CircleCI config to validate terraform and deploy
 cat > .circleci/config.yml << 'EOF'
@@ -926,9 +926,9 @@ EOF
 
 # Replace YOUR_AWS_ACCOUNT_ID with your actual AWS account ID
 
-# Commit and push the compliant version
+# Commit and push the non-compliant version
 git add .
-git commit -m "Add compliant infrastructure that passes policy validation"
+git commit -m "Add non-compliant infrastructure that fails policy validation"
 git push origin main
 
 **Note**: This build will fail, that's intentional:
@@ -938,7 +938,322 @@ git push origin main
 ```
 
 ### 7.3 Verify Complete Success
+To experience a job that passes compliance checks you first need to create the "compliant-deployment branch
+```bash
+# Create and switch to the new branch
+git checkout -b compliant-deployment
 
+# Verify you're on the new branch
+git branch
+```
+
+### 7.4 Edit the circleci config file to include the compliant infrastructure
+```bash
+# Update CircleCI config to validate terraform and deploy
+cat > .circleci/config.yml << 'EOF'
+
+version: 2.1
+
+jobs:
+  policy-validation:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      
+      - run:
+          name: Install Dependencies
+          command: |
+            # Install OPA
+            curl -L -o opa https://openpolicyagent.org/downloads/v0.58.0/opa_linux_amd64_static
+            chmod +x opa
+            sudo mv opa /usr/local/bin/
+            
+            # Install jq for JSON processing
+            sudo apt-get update
+            sudo apt-get install -y jq
+      
+      - run:
+          name: Test OPA Policies
+          command: |
+            echo "Running OPA policy tests..."
+            if [ -d "tests/" ]; then
+              opa test policies/ tests/
+            else
+              echo "No tests directory found, skipping policy tests"
+            fi
+            echo "Policy tests passed!"
+      
+      - run:
+          name: Validate Terraform Configuration
+          command: |
+            echo "Validating COMPLIANT Terraform resources against policies..."
+            
+            # Create JSON representation of compliant S3 bucket
+            cat > terraform-resources.json \<< 'JSON'
+            [
+              {
+                "resource_type": "aws_s3_bucket",
+                "resource_name": "compliant_bucket",
+                "bucket": "circleci-lab-compliant-bucket-12345",
+                "server_side_encryption_configuration": {
+                  "rule": {
+                    "apply_server_side_encryption_by_default": {
+                      "sse_algorithm": "AES256"
+                    }
+                  }
+                },
+                "versioning": {
+                  "enabled": true
+                },
+                "tags": {
+                  "Environment": "prod",
+                  "Owner": "security-team@company.com",
+                  "CostCenter": "CC-1234",
+                  "Project": "SecurityCompliance",
+                  "DataClassification": "internal"
+                }
+              },
+              {
+                "resource_type": "aws_s3_bucket_public_access_block",
+                "resource_name": "compliant_bucket_pab",
+                "bucket": "circleci-lab-compliant-bucket-12345",
+                "block_public_acls": true,
+                "block_public_policy": true,
+                "ignore_public_acls": true,
+                "restrict_public_buckets": true
+              }
+            ]
+            JSON
+            
+            # Validate each resource and track violations
+            TOTAL_VIOLATIONS=0
+            FOUND_VIOLATIONS=false
+            
+            # Process each resource individually
+            for i in $(jq -r 'keys | .[]' terraform-resources.json); do
+              resource=$(jq -c ".[$i]" terraform-resources.json)
+              resource_name=$(echo "$resource" | jq -r '.resource_name')
+              
+              echo "Validating resource: $resource_name"
+              
+              # Write resource to temporary file for OPA
+              echo "$resource" > /tmp/resource_$i.json
+              
+              VIOLATIONS=$(opa eval -d policies/ -i /tmp/resource_$i.json "data.aws.s3.security.deny[x]" --format json)
+              WARNINGS=$(opa eval -d policies/ -i /tmp/resource_$i.json "data.aws.s3.security.warn[x]" --format json)
+              TAG_VIOLATIONS=$(opa eval -d policies/ -i /tmp/resource_$i.json "data.compliance.tagging.deny[x]" --format json)
+              
+              # Check if violations exist
+              if echo "$VIOLATIONS" | jq -e '.result | length > 0' > /dev/null 2>&1; then
+                echo "❌ S3 SECURITY POLICY VIOLATIONS FOUND:"
+                echo "$VIOLATIONS" | jq '.result'
+                echo "VIOLATIONS_FOUND=true" >> /tmp/violations_status
+              fi
+              
+              # Check tagging violations
+              if echo "$TAG_VIOLATIONS" | jq -e '.result | length > 0' > /dev/null 2>&1; then
+                echo "❌ TAGGING POLICY VIOLATIONS FOUND:"
+                echo "$TAG_VIOLATIONS" | jq '.result'
+                echo "VIOLATIONS_FOUND=true" >> /tmp/violations_status
+              fi
+              
+              # Check if warnings exist
+              if echo "$WARNINGS" | jq -e '.result | length > 0' > /dev/null 2>&1; then
+                echo "⚠️  POLICY WARNINGS:"
+                echo "$WARNINGS" | jq '.result'
+              fi
+              
+              if [ ! -f /tmp/violations_status ]; then
+                echo "✅ No violations found for resource: $resource_name"
+              fi
+              
+              # Clean up temp file
+              rm -f /tmp/resource_$i.json
+            done
+            
+            # Check if any violations were found
+            if [ -f /tmp/violations_status ] && grep -q "VIOLATIONS_FOUND=true" /tmp/violations_status; then
+              echo "Found policy violations in Terraform configuration"
+              echo "❌ Build failed due to policy violations"
+              exit 1
+            else
+              echo "✅ All resources passed policy validation!"
+              echo "✅ Ready for deployment"
+            fi
+
+  deploy-compliant-infrastructure:
+    docker:
+      - image: cimg/base:stable
+    environment:
+      AWS_DEFAULT_REGION: us-east-1
+    steps:
+      - checkout
+      
+      - run:
+          name: Install AWS CLI and Terraform
+          command: |
+            # Install AWS CLI
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip -o awscliv2.zip
+            sudo ./aws/install
+            
+            # Install Terraform (clean install)
+            rm -rf terraform*  # Remove any existing terraform files or directories
+            wget https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip
+            unzip -o terraform_1.6.0_linux_amd64.zip
+            chmod +x terraform
+            sudo mv terraform /usr/local/bin/
+            
+            # Verify installations
+            terraform version
+            aws --version
+      
+      - run:
+          name: Create and Deploy Compliant Infrastructure
+          command: |
+            export AWS_ROLE_ARN="arn:aws:iam::YOUR_AWS_ACCOUNT_ID:role/CircleCILabRole"
+            export AWS_WEB_IDENTITY_TOKEN_FILE="/tmp/web-identity-token"
+            echo $CIRCLE_OIDC_TOKEN > $AWS_WEB_IDENTITY_TOKEN_FILE
+            
+            # Create terraform directory if it doesn't exist
+            mkdir -p terraform
+            cd terraform/
+            
+            # Create compliant version with all required security controls
+            cat > main-compliant.tf \<< 'TERRAFORM'
+            provider "aws" {
+              region = var.aws_region
+            }
+            
+            variable "aws_region" {
+              description = "AWS region"
+              type        = string
+              default     = "us-east-1"
+            }
+            
+            # Compliant S3 bucket with all security controls
+            resource "aws_s3_bucket" "compliant_bucket" {
+              bucket = "circleci-lab-compliant-${random_string.suffix.result}"
+              
+              tags = {
+                Environment        = "prod"
+                Owner             = "security-team@company.com"
+                CostCenter        = "CC-1234"
+                Project           = "SecurityCompliance"
+                DataClassification = "internal"
+              }
+            }
+            
+            # Server-side encryption (required by policy)
+            resource "aws_s3_bucket_server_side_encryption_configuration" "compliant_encryption" {
+              bucket = aws_s3_bucket.compliant_bucket.id
+            
+              rule {
+                apply_server_side_encryption_by_default {
+                  sse_algorithm = "AES256"
+                }
+              }
+            }
+            
+            # Block all public access (required by policy)
+            resource "aws_s3_bucket_public_access_block" "compliant_pab" {
+              bucket = aws_s3_bucket.compliant_bucket.id
+              
+              block_public_acls       = true
+              block_public_policy     = true
+              ignore_public_acls      = true
+              restrict_public_buckets = true
+            }
+            
+            # Versioning enabled (recommended by policy)
+            resource "aws_s3_bucket_versioning" "compliant_versioning" {
+              bucket = aws_s3_bucket.compliant_bucket.id
+              versioning_configuration {
+                status = "Enabled"
+              }
+            }
+            
+            # Lifecycle configuration for cost optimization
+            resource "aws_s3_bucket_lifecycle_configuration" "compliant_lifecycle" {
+              bucket = aws_s3_bucket.compliant_bucket.id
+              
+              rule {
+                id     = "transition_to_ia"
+                status = "Enabled"
+                
+                transition {
+                  days          = 30
+                  storage_class = "STANDARD_IA"
+                }
+                
+                transition {
+                  days          = 90
+                  storage_class = "GLACIER"
+                }
+              }
+            }
+            
+            resource "random_string" "suffix" {
+              length  = 8
+              special = false
+              upper   = false
+            }
+            
+            output "bucket_name" {
+              value = aws_s3_bucket.compliant_bucket.bucket
+            }
+            
+            output "bucket_arn" {
+              value = aws_s3_bucket.compliant_bucket.arn
+            }
+            
+            output "compliance_status" {
+              value = "COMPLIANT - All NIST 800-53 controls implemented"
+            }
+            TERRAFORM
+            
+            echo "Initializing Terraform..."
+            terraform init
+            
+            echo "Planning compliant deployment..."
+            terraform plan -out=tfplan
+            
+            echo "Deploying compliant infrastructure..."
+            terraform apply -auto-approve tfplan
+            
+            echo "✅ Compliant infrastructure deployed successfully!"
+            echo "✅ All NIST 800-53 security controls have been implemented:"
+            echo "  - SC-28: Data at rest encryption enabled"
+            echo "  - AC-3: Public access blocked"
+            echo "  - CP-9: Versioning enabled for data protection"
+            echo "  - CM-8: Proper resource tagging for inventory"
+            
+            # Show the outputs
+            terraform output
+            
+            # Clean up to avoid AWS charges
+            sleep 30  # Give a moment to verify deployment
+            echo "Cleaning up resources..."
+            terraform destroy -auto-approve
+            echo "✅ Resources cleaned up successfully"
+
+workflows:
+  security-pipeline:
+    jobs:
+      - policy-validation
+      - deploy-compliant-infrastructure:
+          requires:
+            - policy-validation
+EOF
+
+# Replace YOUR_AWS_ACCOUNT_ID with your actual AWS account ID
+
+# Commit and push the non-compliant version
+git add .
+git commit -m "Add compliant infrastructure that passes policy validation"
+git push -u origin compliant-deployment
+```
 Watch the pipeline run on the compliant-deployment branch - it should now:
 1. Pass all policy tests
 2. Pass policy validation
