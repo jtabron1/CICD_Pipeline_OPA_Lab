@@ -281,7 +281,7 @@ cat > aws-configs/circleci-policy.json << 'EOF'
 }
 EOF
 
-# Your project structure now looks like:
+# Your project structure now looks like (remember you can always open finder and confirm the poject structure):
 # circleci-aws-opa-lab/
 # ├── .circleci/
 # │   └── config.yml
