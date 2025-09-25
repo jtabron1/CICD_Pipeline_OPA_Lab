@@ -8,8 +8,6 @@
 - GitHub account
 - AWS account with administrative access
 - Basic familiarity with terminal/command line
-- Text editor (VS Code, nano, etc.)
-- - **Note:** _If nano doesn't work for you via the terminal when creating/editing files (config files, policy files, etc.), you can always copy and paste the code in the lab step directly into that file, [once created](https://docs.github.com/en/repositories/working-with-files/managing-files/creating-new-files), in github and commit the changes._
   - **Note:** _If you get stuck at anytime in this lab, or something isn't working as it should, ChatGPT or Claude is your best friend :-)_ 
 
 ---
@@ -938,7 +936,7 @@ git push origin main
 ```
 
 ### 7.3 Verify Complete Success
-To experience a job that passes compliance checks you first need to create the "compliant-deployment branch
+To experience a job that passes compliance checks you first need to create the "compliant-deployment" branch
 ```bash
 # Create and switch to the new branch
 git checkout -b compliant-deployment
@@ -1249,7 +1247,7 @@ EOF
 
 # Replace YOUR_AWS_ACCOUNT_ID with your actual AWS account ID
 
-# Commit and push the non-compliant version
+# Commit and push the compliant version
 git add .
 git commit -m "Add compliant infrastructure that passes policy validation"
 git push -u origin compliant-deployment
