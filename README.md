@@ -447,8 +447,7 @@ git push origin main
 **Verify in CircleCI**:
 1. Go to CircleCI dashboard
 2. Watch the pipeline run
-3. You should see "AWS connection successful!" in the logs
-4. The `aws sts get-caller-identity` command should show your AWS account details
+3. You should see a green "Successful!" in the pipeline for this job and a green check mark next to "test AWS connection"
 
 ---
 
