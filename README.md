@@ -711,6 +711,10 @@ EOF
 ```
 
 ### 6.2 Update CircleCI to Validate Terraform and Deploy
+```bash
+# Update CircleCI config to validate terraform and deploy
+cat > .circleci/config.yml << 'EOF'
+
 version: 2.1
 
 jobs:
